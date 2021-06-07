@@ -260,7 +260,7 @@ void mdns_query_async_delete(mdns_search_once_t* search);
 /**
  * @return True if query finished, results available as a pointer to output parameter. The result has be freed manually.
  */
-bool mdns_query_async_get_result(mdns_search_once_t* search, uint32_t timeout_ms, mdns_result_t ** results);
+bool mdns_query_async_get_result(mdns_search_once_t* search, uint32_t timeout_ms, mdns_result_t ** results, uint8_t * num_results);
 
 /**
  * @brief  Query mDNS for host or service
