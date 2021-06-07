@@ -245,6 +245,23 @@ esp_err_t mdns_service_txt_item_remove(const char * service_type, const char * p
  */
 esp_err_t mdns_service_remove_all(void);
 
+typedef struct mdns_search_once_s mdns_search_once_t;
+
+/**
+ * @return New search object if query initiated successfully. Search has to be tested for progress and deleted manually!
+ */
+mdns_search_once_t* mdns_query_async_new(const char * name, const char * service, const char * proto, uint16_t type, uint32_t timeout, size_t max_results);
+
+/**
+ * @brief Deletes the finished query. Call this only after the search has ended!
+ */
+void mdns_query_async_delete(mdns_search_once_t* search);
+
+/**
+ * @return True if query finished, results available as a pointer to output parameter. The result has be freed manually.
+ */
+bool mdns_query_async_get_result(mdns_search_once_t* search, uint32_t timeout_ms, mdns_result_t ** results);
+
 /**
  * @brief  Query mDNS for host or service
  *         All following query methods are derived from this one

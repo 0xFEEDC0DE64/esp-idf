@@ -4724,6 +4724,44 @@ void mdns_query_results_free(mdns_result_t * results)
     }
 }
 
+mdns_search_once_t* mdns_query_async_new(const char * name, const char * service, const char * proto, uint16_t type, uint32_t timeout, size_t max_results)
+{
+    mdns_search_once_t *search = NULL;
+
+    if (!_mdns_server || !timeout || _str_null_or_empty(service) != _str_null_or_empty(proto)) {
+        return NULL;
+    }
+
+    search = _mdns_search_init(name, service, proto, type, timeout, max_results);
+    if (!search) {
+        return NULL;
+    }
+
+    if (_mdns_send_search_action(ACTION_SEARCH_ADD, search)) {
+        _mdns_search_free(search);
+        return NULL;
+    }
+
+    return search;
+}
+
+void mdns_query_async_delete(mdns_search_once_t* search)
+{
+    MDNS_SERVICE_LOCK();
+    assert(search->state == SEARCH_OFF);
+    _mdns_search_free(search);
+    MDNS_SERVICE_UNLOCK();
+}
+
+bool mdns_query_async_get_result(mdns_search_once_t* search, uint32_t timeout_ms, mdns_result_t ** results)
+{
+    if (xSemaphoreTake(search->done_semaphore, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
+        *results = search->result;
+        return true;
+    }
+    return false;
+}
+
 esp_err_t mdns_query(const char * name, const char * service, const char * proto, uint16_t type, uint32_t timeout, size_t max_results, mdns_result_t ** results)
 {
     mdns_search_once_t * search = NULL;
