@@ -344,7 +344,8 @@ static int http_on_header_value(http_parser *parser, const char *at, size_t leng
 #endif
     if (strcasecmp(client->current_header_key, "Location") == 0) {
         HTTP_RET_ON_FALSE_DBG(http_utils_append_string(&client->location, at, length), -1, TAG, "Failed to append string");
-    } else if (strcasecmp(client->current_header_key, "WWW-Authenticate") == 0) {
+    } else if (strcasecmp(client->current_header_key, "WWW-Authenticate") == 0 ||
+               strcasecmp(client->current_header_key, "X-WWW-Authenticate") == 0) {
         HTTP_RET_ON_FALSE_DBG(http_utils_append_string(&client->auth_header, at, length), -1, TAG, "Failed to append string");
     }
     HTTP_RET_ON_FALSE_DBG(http_utils_append_string(&client->current_header_value, at, length), -1, TAG, "Failed to append string");
