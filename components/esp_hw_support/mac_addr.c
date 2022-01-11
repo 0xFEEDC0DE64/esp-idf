@@ -86,7 +86,8 @@ esp_err_t esp_efuse_mac_get_custom(uint8_t *mac)
     uint8_t version;
     esp_efuse_read_field_blob(ESP_EFUSE_MAC_CUSTOM_VER, &version, 8);
     if (version != 1) {
-        ESP_LOGE(TAG, "Base MAC address from BLK3 of EFUSE version error, version = %d", version);
+        // version 0 means has not been setup
+        ESP_LOG_LEVEL_LOCAL((version == 0 ? ESP_LOG_DEBUG : ESP_LOG_ERROR), TAG, "Base MAC address from BLK3 of EFUSE version error, version = %d", version);
         return ESP_ERR_INVALID_VERSION;
     }
 
