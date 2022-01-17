@@ -1658,6 +1658,8 @@ static bool _mdns_service_match_ptr_question(const mdns_service_t *service, cons
         }
         return false;
     }
+    if (question->host && !service->instance)
+        return false;
     if (question->host) {
         if (strcasecmp(_mdns_get_service_instance_name(service), question->host) != 0) {
             return false;
