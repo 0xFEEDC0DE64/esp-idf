@@ -278,12 +278,12 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 #define LOG_RESET_COLOR
 #endif //CONFIG_LOG_COLORS
 
-#define LOG_FORMAT(letter, format, tag)  LOG_COLOR_ ## letter #letter " (%u) %s %s:%u %s(): " format LOG_RESET_COLOR "\n", esp_log_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
-#define LOG_SYSTEM_TIME_FORMAT(letter, format, tag)  LOG_COLOR_ ## letter #letter " (%s) %s %s:%u %s(): " format LOG_RESET_COLOR "\n", esp_log_system_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
+#define LOG_FORMAT(letter, format, tag)  LOG_COLOR_ ## letter #letter " (%u) %s %s:%d %s(): " format LOG_RESET_COLOR "\n", esp_log_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
+#define LOG_SYSTEM_TIME_FORMAT(letter, format, tag)  LOG_COLOR_ ## letter #letter " (%s) %s %s:%d %s(): " format LOG_RESET_COLOR "\n", esp_log_system_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
 // the following format helper is used in espcoredump
-#define LOG_FORMAT_DRAM(letter, format, tag)  DRAM_STR(LOG_COLOR_ ## letter #letter " (%u) %s %s:%u %s(): " format LOG_RESET_COLOR "\n"), esp_log_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
+#define LOG_FORMAT_DRAM(letter, format, tag)  DRAM_STR(LOG_COLOR_ ## letter #letter " (%u) %s %s:%d %s(): " format LOG_RESET_COLOR "\n"), esp_log_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
 // the following format helper is used in app_trace
-#define LOG_EARLY_FORMAT(letter, format, tag)  LOG_COLOR_ ## letter #letter " (%u) %s %s:%u %s(): " format LOG_RESET_COLOR "\n", esp_log_early_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
+#define LOG_EARLY_FORMAT(letter, format, tag)  LOG_COLOR_ ## letter #letter " (%u) %s %s:%d %s(): " format LOG_RESET_COLOR "\n", esp_log_early_timestamp(), tag, (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), __LINE__, __FUNCTION__
 
 /** @endcond */
 
