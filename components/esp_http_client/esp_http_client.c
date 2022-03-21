@@ -1422,7 +1422,7 @@ int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len)
 esp_err_t esp_http_client_perform(esp_http_client_handle_t client)
 {
     esp_err_t err = ESP_FAIL;
-    do {
+    //do {
         if (client->process_again) {
             esp_http_client_prepare(client);
         }
@@ -1562,7 +1562,9 @@ esp_err_t esp_http_client_perform(esp_http_client_handle_t client)
             default:
                 break;
         }
-    } while (client->process_again && err == ESP_OK);
+    //} while (client->process_again && err == ESP_OK);
+    if (client->process_again && err == ESP_OK)
+        return EAGAIN;
 
     return err;
 }
