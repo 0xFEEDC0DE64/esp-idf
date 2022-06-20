@@ -19,7 +19,7 @@
 #include "soc/soc_caps.h"
 #include "hal/cpu_hal.h"
 
-void __attribute__((noreturn)) abort(void)
+void abort(void)
 {
     #define ERR_STR1  "abort() was called at PC 0x"
     #define ERR_STR2  " on core "

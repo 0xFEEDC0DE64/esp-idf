@@ -111,7 +111,7 @@ struct invalid_builtin_data {
 };
 
 
-static void __ubsan_default_handler(struct source_location *loc, const char *func) __attribute__((noreturn));
+static void __ubsan_default_handler(struct source_location *loc, const char *func);
 
 /*
  * When compiling with -fsanitize=undefined the compiler expects functions

@@ -76,7 +76,7 @@ void panic_print_hex(int h);
 #define panic_print_hex(h)
 #endif
 
-void __attribute__((noreturn)) panic_abort(const char *details);
+void panic_abort(const char *details);
 
 void panic_arch_fill_info(void *frame, panic_info_t *info);
 

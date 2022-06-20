@@ -37,7 +37,7 @@ static inline void ra_to_str(char *addr)
 /* Overriding assert function so that whenever assert is called from critical section,
  * it does not lead to a crash of its own.
  */
-void __attribute__((noreturn)) __assert_func(const char *file, int line, const char *func, const char *expr)
+void __assert_func(const char *file, int line, const char *func, const char *expr)
 {
 #if CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT
     char buff[sizeof(ASSERT_STR) + 11 + 1] = ASSERT_STR;
@@ -84,9 +84,9 @@ void __attribute__((noreturn)) __assert_func(const char *file, int line, const c
     buff[off] = '\0';
     esp_system_abort(buff);
 #endif  /* CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT */
-}
+    }
 
-void __attribute__((noreturn)) __assert(const char *file, int line, const char *failedexpr)
+void __assert(const char *file, int line, const char *failedexpr)
 {
     __assert_func(file, line, NULL, failedexpr);
 }

@@ -130,7 +130,7 @@ const char *esp_get_idf_version(void)
     return IDF_VER;
 }
 
-void __attribute__((noreturn)) esp_system_abort(const char *details)
+void esp_system_abort(const char *details)
 {
     panic_abort(details);
 }

@@ -221,7 +221,7 @@ void IRAM_ATTR xt_unhandled_exception(void *frame)
     panic_handler(frame, false);
 }
 
-void __attribute__((noreturn)) panic_restart(void)
+void panic_restart(void)
 {
     bool digital_reset_needed = false;
 #ifdef CONFIG_IDF_TARGET_ESP32

@@ -112,7 +112,7 @@ uint32_t esp_get_minimum_free_heap_size( void );
  *
  * @param details Details that will be displayed during panic handling.
  */
-void  __attribute__((noreturn)) esp_system_abort(const char* details);
+void esp_system_abort(const char* details);
 
 #ifdef __cplusplus
 }
