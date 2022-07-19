@@ -54,12 +54,31 @@ esp_err_t esp_flash_encrypt_check_and_update(void)
     ESP_LOGV(TAG, "CRYPT_CNT %d, write protection %d", flash_crypt_cnt, flash_crypt_wr_dis);
 
     if (flash_crypt_cnt % 2 == 1) {
+        esp_err_t err;
+
         /* Flash is already encrypted */
         int left = (CRYPT_CNT[0]->bit_count - flash_crypt_cnt) / 2;
         if (flash_crypt_wr_dis) {
             left = 0; /* can't update FLASH_CRYPT_CNT, no more flashes */
         }
         ESP_LOGI(TAG, "flash encryption is enabled (%d plaintext flashes left)", left);
+
+        /* Ensure security eFuses are burnt */
+        esp_efuse_batch_write_begin();
+        err = esp_flash_encryption_enable_secure_features();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Error setting security eFuses (err=0x%x).", err);
+            esp_efuse_batch_write_cancel();
+            return err;
+        }
+
+        err = esp_efuse_batch_write_commit();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Error programming security eFuses (err=0x%x).", err);
+            return err;
+        }
+        ESP_LOGI(TAG, "Security eFuses are burnt");
+
         return ESP_OK;
     } else {
 #ifndef CONFIG_SECURE_FLASH_REQUIRE_ALREADY_ENABLED
