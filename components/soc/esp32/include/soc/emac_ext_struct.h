@@ -11,7 +11,7 @@ extern "C" {
 
 #include <stdint.h>
 
-typedef struct emac_ext_dev_s {
+typedef volatile struct emac_ext_dev_s {
     volatile union {
         struct {
             uint32_t div_num : 4;
