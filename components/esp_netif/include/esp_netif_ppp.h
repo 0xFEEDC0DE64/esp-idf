@@ -16,6 +16,8 @@
 #ifndef _ESP_NETIF_PPP_H_
 #define _ESP_NETIF_PPP_H_
 
+#include "esp_netif_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
