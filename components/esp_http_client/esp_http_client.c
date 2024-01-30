@@ -1367,7 +1367,7 @@ esp_err_t esp_http_client_perform(esp_http_client_handle_t client)
         }
     //} while (client->process_again);
     //return ESP_OK;
-    return client->process_again ? EAGAIN : ESP_OK;
+    return client->process_again ? ESP_ERR_HTTP_EAGAIN : ESP_OK;
 }
 
 int64_t esp_http_client_fetch_headers(esp_http_client_handle_t client)
