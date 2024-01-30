@@ -1560,7 +1560,7 @@ esp_err_t esp_http_client_perform(esp_http_client_handle_t client)
         }
     //} while (client->process_again && err == ESP_OK);
     if (client->process_again && err == ESP_OK)
-        return EAGAIN;
+        return ESP_ERR_HTTP_EAGAIN;
 
     return err;
 }
