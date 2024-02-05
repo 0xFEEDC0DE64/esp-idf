@@ -85,7 +85,7 @@ static uint64_t adjust_boot_time(void)
 
 
 // Get the adjusted boot time.
-static uint64_t get_adjusted_boot_time(void)
+uint64_t get_adjusted_boot_time(void)
 {
     _lock_acquire(&s_time_lock);
     uint64_t adjust_time = adjust_boot_time();
