@@ -279,7 +279,7 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 #define esp_log_buffer_hex      ESP_LOG_BUFFER_HEX
 #define esp_log_buffer_char     ESP_LOG_BUFFER_CHAR
 
-#if CONFIG_LOG_COLORS
+#if CONFIG_LOG_COLORS && !defined(BOOTLOADER_BUILD)
 #define LOG_COLOR_BLACK   "30"
 #define LOG_COLOR_RED     "31"
 #define LOG_COLOR_GREEN   "32"
@@ -304,6 +304,17 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 #define LOG_RESET_COLOR
 #endif //CONFIG_LOG_COLORS
 
+#ifdef BOOTLOADER_BUILD
+
+#define LOG_ADDITIONAL_ARGS \
+    __LINE__, \
+    __FUNCTION__
+
+#define LOG_FORMAT(letter, format)  LOG_COLOR_ ## letter #letter " (%" PRIu32 ") %s %d %s(): " format LOG_RESET_COLOR "\n"
+#define LOG_SYSTEM_TIME_FORMAT(letter, format)  LOG_COLOR_ ## letter #letter " (%s) %s %d %s(): " format LOG_RESET_COLOR "\n"
+
+#else
+
 #define LOG_ADDITIONAL_ARGS \
     (__builtin_strrchr(__FILE__, '/') ? __builtin_strrchr(__FILE__, '/') + 1 : __FILE__), \
     __LINE__, \
@@ -311,6 +322,8 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 
 #define LOG_FORMAT(letter, format)  LOG_COLOR_ ## letter #letter " (%" PRIu32 ") %s %s:%d %s(): " format LOG_RESET_COLOR "\n"
 #define LOG_SYSTEM_TIME_FORMAT(letter, format)  LOG_COLOR_ ## letter #letter " (%s) %s %s:%d %s(): " format LOG_RESET_COLOR "\n"
+
+#endif
 
 /** @endcond */
 
