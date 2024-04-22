@@ -292,10 +292,31 @@ esp_err_t httpd_uri(struct httpd_data *hd)
 
     /* If URI with method not found, respond with error code */
     if (uri == NULL) {
+
         switch (err) {
             case HTTPD_404_NOT_FOUND:
-                ESP_LOGW(TAG, LOG_FMT("URI '%s' not found"), req->uri);
+            {
+                char ipstr[INET6_ADDRSTRLEN] = "UNKNOWN";
+
+                const int sockfd = httpd_req_to_sockfd(req);
+
+                if (sockfd < 0)
+                    ESP_LOGW(TAG, "httpd_req_to_sockfd() failed with %i", sockfd);
+                else
+                {
+                    struct sockaddr_in6 addr;   // esp_http_server uses IPv6 addressing
+                    socklen_t addr_size = sizeof(addr);
+                    const int result = getpeername(sockfd, (struct sockaddr *)&addr, &addr_size);
+
+                    if (result < 0)
+                        ESP_LOGW(TAG, "getpeername() failed with %i", result);
+                    else
+                        inet_ntop(AF_INET, &addr.sin6_addr.un.u32_addr[3], ipstr, sizeof(ipstr));
+                }
+
+                ESP_LOGW(TAG, LOG_FMT("URI '%s' not found for %s"), req->uri, ipstr);
                 return httpd_req_handle_err(req, HTTPD_404_NOT_FOUND);
+            }
             case HTTPD_405_METHOD_NOT_ALLOWED:
                 ESP_LOGW(TAG, LOG_FMT("Method '%d' not allowed for URI '%s'"),
                          req->method, req->uri);
