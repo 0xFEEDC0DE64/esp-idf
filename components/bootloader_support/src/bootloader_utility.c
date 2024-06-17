@@ -717,7 +717,25 @@ static void load_image(const esp_image_metadata_t *image_data)
      */
     ESP_LOGI(TAG, "Checking flash encryption...");
     bool flash_encryption_enabled = esp_flash_encrypt_state();
-    if (!flash_encryption_enabled) {
+    if (flash_encryption_enabled) {
+#if BOOTLOADER_BUILD
+        /* Ensure security eFuses are burnt */
+        esp_efuse_batch_write_begin();
+        esp_err_t err = esp_flash_encryption_enable_secure_features();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Error setting security eFuses (err=0x%x).", err);
+            esp_efuse_batch_write_cancel();
+            return;
+        }
+
+        err = esp_efuse_batch_write_commit();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Error programming security eFuses (err=0x%x).", err);
+            return;
+        }
+        ESP_LOGI(TAG, "Security eFuses are burnt");
+#endif // BOOTLOADER_BUILD
+    } else {
 #ifdef CONFIG_SECURE_FLASH_REQUIRE_ALREADY_ENABLED
         ESP_LOGE(TAG, "flash encryption is not enabled, and SECURE_FLASH_REQUIRE_ALREADY_ENABLED is set, refusing to boot.");
         return;
