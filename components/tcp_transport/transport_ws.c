@@ -485,7 +485,7 @@ static int _ws_write_optimized(esp_transport_handle_t t, int opcode, int mask_fl
 
     int poll_write;
     if ((poll_write = esp_transport_poll_write(ws->parent, timeout_ms)) <= 0) {
-        ESP_LOGE(TAG, "Error transport_poll_write");
+        ESP_LOGE(TAG, "Error transport_poll_write %i", poll_write);
         return poll_write;
     }
 
