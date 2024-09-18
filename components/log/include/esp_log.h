@@ -59,7 +59,7 @@ void esp_log_writev(esp_log_level_t level, const char* tag, const char* format, 
 
 /** @cond */
 
-#ifdef BOOTLOADER_BUILD
+#if defined(BOOTLOADER_BUILD) || !defined(CONFIG_LOG_FILE_LOCATION)
 
 #define LOG_ADDITIONAL_ARGS \
     __LINE__, \

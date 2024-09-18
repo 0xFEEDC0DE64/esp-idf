@@ -7,6 +7,12 @@ menu "Format"
             Enable ANSI terminal color codes.
             In order to view these, your terminal program must support ANSI color codes.
 
+    config LOG_FILE_LOCATION
+        bool "Show filename and linenumber"
+        default n
+        help
+            Show filename and linenumber in log statements. Increases binary file significantly.
+
     choice LOG_TIMESTAMP_SOURCE
         prompt "Timestamp"
         default LOG_TIMESTAMP_SOURCE_RTOS
