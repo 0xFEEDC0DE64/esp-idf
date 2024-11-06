@@ -1453,6 +1453,10 @@ esp_err_t spi_bus_get_max_transaction_len(spi_host_device_t host_id, size_t *max
     return ESP_OK;
 }
 
+intr_handle_t spi_bus_get_intr(spi_host_device_t host) {
+    return bus_driver_ctx[host]->intr;
+}
+
 #if SOC_SPI_SCT_SUPPORTED
 
 /*-----------------------------------------------------------

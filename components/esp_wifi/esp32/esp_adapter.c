@@ -342,7 +342,7 @@ static int32_t task_create_pinned_to_core_wrapper(void *task_func, const char *n
 
 static int32_t task_create_wrapper(void *task_func, const char *name, uint32_t stack_depth, void *param, uint32_t prio, void *task_handle)
 {
-    return (uint32_t)xTaskCreate(task_func, name, stack_depth, param, prio, task_handle);
+    return (uint32_t)xTaskCreatePinnedToCore(task_func, name, stack_depth, param, prio, task_handle,0);
 }
 
 static int32_t IRAM_ATTR task_ms_to_tick_wrapper(uint32_t ms)

@@ -405,6 +405,8 @@ int spi_get_freq_limit(bool gpio_is_used, int input_delay_ns);
  */
 esp_err_t spi_bus_get_max_transaction_len(spi_host_device_t host_id, size_t *max_bytes);
 
+intr_handle_t spi_bus_get_intr(spi_host_device_t host);
+
 #ifdef __cplusplus
 }
 #endif
