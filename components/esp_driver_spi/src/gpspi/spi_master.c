@@ -766,6 +766,22 @@ static void SPI_MASTER_ISR_ATTR spi_bus_intr_disable(void *host)
 #define spi_dma_start(chan, addr)   gdma_start(chan, (intptr_t)(addr))
 #endif
 
+void SPI_MASTER_ISR_ATTR spi_dma_reset_start(spi_device_handle_t handle){
+    spi_host_t *host = handle->host;
+    spi_hal_context_t *hal = &(host->hal);
+
+    const spi_dma_ctx_t *dma_ctx = host->dma_ctx;
+
+    spi_dma_reset(dma_ctx->rx_dma_chan);
+    spi_hal_hw_prepare_rx(hal->hw);
+    spi_dma_start(dma_ctx->rx_dma_chan, dma_ctx->dmadesc_rx);
+
+
+    spi_dma_reset(dma_ctx->tx_dma_chan);
+    spi_hal_hw_prepare_tx(hal->hw);
+    spi_dma_start(dma_ctx->tx_dma_chan, dma_ctx->dmadesc_tx);
+}
+
 #ifdef SPI_LL_PERIPH_HAS_SCT
 static void SPI_MASTER_ISR_ATTR s_sct_init_conf_buffer(spi_hal_context_t *hal, spi_ll_sct_full_reg_t *buffer, uint32_t trans_num)
 {
@@ -1681,6 +1697,10 @@ esp_err_t spi_bus_get_max_transaction_len(spi_host_device_t host_id, size_t *max
     }
 
     return ESP_OK;
+}
+
+intr_handle_t spi_bus_get_intr(spi_host_device_t host) {
+    return bus_driver_ctx[host]->intr;
 }
 
 #ifdef SPI_LL_PERIPH_HAS_SCT
