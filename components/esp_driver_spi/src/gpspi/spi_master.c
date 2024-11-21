@@ -671,6 +671,22 @@ static void SPI_MASTER_ISR_ATTR spi_bus_intr_disable(void *host)
 #define spi_dma_start(chan, addr)   gdma_start(chan, (intptr_t)(addr))
 #endif
 
+void SPI_MASTER_ISR_ATTR spi_dma_reset_start(spi_device_handle_t handle){
+    spi_host_t *host = handle->host;
+    spi_hal_context_t *hal = &(host->hal);
+
+    const spi_dma_ctx_t *dma_ctx = host->dma_ctx;
+
+    spi_dma_reset(dma_ctx->rx_dma_chan);
+    spi_hal_hw_prepare_rx(hal->hw);
+    spi_dma_start(dma_ctx->rx_dma_chan, dma_ctx->dmadesc_rx);
+
+
+    spi_dma_reset(dma_ctx->tx_dma_chan);
+    spi_hal_hw_prepare_tx(hal->hw);
+    spi_dma_start(dma_ctx->tx_dma_chan, dma_ctx->dmadesc_tx);
+}
+
 static void SPI_MASTER_ISR_ATTR s_spi_dma_prepare_data(spi_host_t *host, spi_hal_context_t *hal, const spi_hal_dev_config_t *dev, const spi_hal_trans_config_t *trans)
 {
     const spi_dma_ctx_t *dma_ctx = host->dma_ctx;
@@ -1166,6 +1182,58 @@ static SPI_MASTER_ISR_ATTR esp_err_t setup_priv_desc(spi_host_t *host, spi_trans
 clean_up:
     uninstall_priv_desc(priv_desc);
     return ESP_ERR_NO_MEM;
+}
+
+esp_err_t SPI_MASTER_ATTR spi_device_queue_trans_from_isr(spi_device_handle_t handle, spi_transaction_t *trans_desc, BaseType_t *higher_prio_task_woken)
+{
+    esp_err_t ret = check_trans_valid(handle, trans_desc);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    spi_host_t *host = handle->host;
+
+    SPI_CHECK(!spi_bus_device_is_polling(handle), "Cannot queue new transaction while previous polling transaction is not terminated.", ESP_ERR_INVALID_STATE);
+
+    /* Even when using interrupt transfer, the CS can only be kept activated if the bus has been
+     * acquired with `spi_device_acquire_bus()` first. */
+    if (host->device_acquiring_lock != handle && (trans_desc->flags & SPI_TRANS_CS_KEEP_ACTIVE)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    spi_trans_priv_t trans_buf = { .trans = trans_desc, };
+    ret = setup_priv_desc(host, &trans_buf);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+#ifdef CONFIG_PM_ENABLE
+    // though clock source is selectable, read/write reg and mem of spi peripheral still use APB
+    // and dma still use APB, so pm_lock is still needed
+    esp_pm_lock_acquire(host->bus_attr->pm_lock);
+#endif
+    //Send to queue and invoke the ISR.
+    BaseType_t r = xQueueSendFromISR(handle->trans_queue, (void *)&trans_buf,higher_prio_task_woken);
+
+    if (!r) {
+        ret = ESP_ERR_TIMEOUT;
+#ifdef CONFIG_PM_ENABLE
+        //Release APB frequency lock
+        esp_pm_lock_release(host->bus_attr->pm_lock);
+#endif
+        goto clean_up;
+    }
+
+    // The ISR will be invoked at correct time by the lock with `spi_bus_intr_enable`.
+    ret = spi_bus_lock_bg_request(handle->dev_lock);
+    if (ret != ESP_OK) {
+        goto clean_up;
+    }
+    return ESP_OK;
+
+clean_up:
+    uninstall_priv_desc(&trans_buf);
+    return ret;
 }
 
 esp_err_t SPI_MASTER_ATTR spi_device_queue_trans(spi_device_handle_t handle, spi_transaction_t *trans_desc, TickType_t ticks_to_wait)
