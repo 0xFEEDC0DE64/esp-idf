@@ -580,6 +580,7 @@ static esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls)
         if (esp_ret != ESP_OK) {
             return esp_ret;
         }
+        mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
     } else {
 #ifdef CONFIG_ESP_TLS_SERVER_MIN_AUTH_MODE_OPTIONAL
         mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
