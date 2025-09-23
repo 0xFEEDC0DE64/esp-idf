@@ -67,7 +67,8 @@
 
 [submodule "components/mqtt/esp-mqtt"]
 	path = components/mqtt/esp-mqtt
-	url = ../../espressif/esp-mqtt.git
+#	url = ../../espressif/esp-mqtt.git
+	url = ../../0xFEEDC0DE64/esp-mqtt.git
 
 [submodule "components/protobuf-c/protobuf-c"]
 	path = components/protobuf-c/protobuf-c
