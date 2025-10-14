@@ -72,7 +72,7 @@ typedef struct {
  *                  - ESP_OK : success
  *                  - other  : failed
  */
-esp_err_t esp_phy_set_ant_gpio(esp_phy_ant_gpio_config_t *config);
+esp_err_t esp_phy_set_ant_gpio(const esp_phy_ant_gpio_config_t *config);
 
 /**
  * @brief Get current antenna GPIO configuration
