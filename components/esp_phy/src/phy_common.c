@@ -177,7 +177,7 @@ static void phy_ant_set_gpio_output(uint32_t io_num)
     gpio_config(&io_conf);
 }
 
-esp_err_t esp_phy_set_ant_gpio(esp_phy_ant_gpio_config_t *config)
+esp_err_t esp_phy_set_ant_gpio(const esp_phy_ant_gpio_config_t *config)
 {
     if (config == NULL) {
         ESP_LOGE(TAG, "Invalid configuration");
