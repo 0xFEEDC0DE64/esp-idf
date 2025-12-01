@@ -103,7 +103,14 @@ static bool process_again(int status_code)
 static esp_err_t _http_handle_response_code(esp_https_ota_t *https_ota_handle, int status_code)
 {
     esp_err_t err = ESP_FAIL;
-    if (redirection_required(status_code)) {
+    if (https_ota_handle->binary_file_len > 0
+#if CONFIG_ESP_HTTPS_OTA_ENABLE_PARTIAL_DOWNLOAD
+        && !https_ota_handle->partial_http_download
+#endif
+        && status_code != HttpStatus_PartialContent) {
+        ESP_LOGE(TAG, "Requested range header ignored by server");
+        return ESP_ERR_HTTP_RANGE_NOT_SATISFIABLE;
+    } else if (redirection_required(status_code)) {
         err = esp_http_client_set_redirection(https_ota_handle->http_client);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "URL redirection Failed");
