@@ -53,7 +53,7 @@
 
 [submodule "components/lwip/lwip"]
 	path = components/lwip/lwip
-	url = ../../espressif/esp-lwip.git
+	url = ../../0xFEEDC0DE64/esp-lwip.git
 
 [submodule "components/protobuf-c/protobuf-c"]
 	path = components/protobuf-c/protobuf-c
