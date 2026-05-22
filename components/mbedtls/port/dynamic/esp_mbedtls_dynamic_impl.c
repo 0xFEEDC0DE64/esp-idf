@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include "esp_mbedtls_dynamic_impl.h"
+#include "esp_heap_caps.h"
 #include "sdkconfig.h"
 
 #if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
@@ -162,6 +163,7 @@ esp_err_t esp_mbedtls_dynamic_set_rx_buf_static(mbedtls_ssl_context *ssl)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + buffer_len);
     if (!esp_buf) {
         ESP_LOGE(TAG, "rx buf alloc(%d bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + buffer_len);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         return ESP_ERR_NO_MEM;
     }
     esp_mbedtls_init_ssl_buf(esp_buf, buffer_len);
@@ -186,6 +188,7 @@ static int esp_mbedtls_alloc_tx_buf(mbedtls_ssl_context *ssl, int len)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + len);
     if (!esp_buf) {
         ESP_LOGE(TAG, "alloc(%d bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + len);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         return MBEDTLS_ERR_SSL_ALLOC_FAILED;
     }
 
@@ -247,6 +250,7 @@ int esp_mbedtls_reset_add_rx_buffer(mbedtls_ssl_context *ssl)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + MBEDTLS_SSL_IN_BUFFER_LEN);
     if (!esp_buf) {
         ESP_LOGE(TAG, "alloc(%d bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + MBEDTLS_SSL_IN_BUFFER_LEN);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         return MBEDTLS_ERR_SSL_ALLOC_FAILED;
     }
 
@@ -298,6 +302,7 @@ int esp_mbedtls_add_tx_buffer(mbedtls_ssl_context *ssl, size_t buffer_len)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + buffer_len);
     if (!esp_buf) {
         ESP_LOGE(TAG, "alloc(%zu bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + buffer_len);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         ret = MBEDTLS_ERR_SSL_ALLOC_FAILED;
         goto exit;
     }
@@ -343,6 +348,7 @@ int esp_mbedtls_free_tx_buffer(mbedtls_ssl_context *ssl)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + TX_IDLE_BUFFER_SIZE);
     if (!esp_buf) {
         ESP_LOGE(TAG, "alloc(%d bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + TX_IDLE_BUFFER_SIZE);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         return MBEDTLS_ERR_SSL_ALLOC_FAILED;
     }
 
@@ -434,6 +440,7 @@ int esp_mbedtls_add_rx_buffer(mbedtls_ssl_context *ssl)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + buffer_len);
     if (!esp_buf) {
         ESP_LOGE(TAG, "alloc(%d bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + buffer_len);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         ret = MBEDTLS_ERR_SSL_ALLOC_FAILED;
         goto exit;
     }
@@ -506,6 +513,7 @@ int esp_mbedtls_free_rx_buffer(mbedtls_ssl_context *ssl)
     esp_buf = mbedtls_calloc(1, SSL_BUF_HEAD_OFFSET_SIZE + 16);
     if (!esp_buf) {
         ESP_LOGE(TAG, "alloc(%d bytes) failed", SSL_BUF_HEAD_OFFSET_SIZE + 16);
+        ESP_LOGE(TAG, "-> free memory: %zu bytes 32-bit, %zu bytes 8-bit", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         ret = MBEDTLS_ERR_SSL_ALLOC_FAILED;
         goto exit;
     }
