@@ -72,6 +72,12 @@ FORCE_INLINE_ATTR heap_t* find_biggest_heap(void)
     return biggest_heap;
 }
 
+static heap_caps_block_owner_t get_current_block_owner(void) {
+    return (heap_caps_block_owner_t) {
+        .task = xTaskGetCurrentTaskHandle(),
+    };
+}
+
 /**
  * @brief Create a new alloc stats entry object
  *
@@ -277,13 +283,16 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
         assert(s_task_tracking_mutex);
     }
 
-    TaskHandle_t task_handle = xTaskGetCurrentTaskHandle();
+    void *block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(ptr);
+    MULTI_HEAP_GET_BLOCK_OWNER(block_owner_ptr) = get_current_block_owner();
+    heap_caps_block_owner_t block_owner = MULTI_HEAP_GET_BLOCK_OWNER(block_owner_ptr);
+
     task_info_t *task_info = NULL;
 
     xSemaphoreTake(s_task_tracking_mutex, portMAX_DELAY);
     /* find the task in the list and update the overall stats */
     SLIST_FOREACH(task_info, &task_stats, next_task_info) {
-        if (task_info->task_stat.handle == task_handle && task_info->task_stat.is_alive) {
+        if (task_info->task_stat.handle == block_owner.task && task_info->task_stat.is_alive) {
             task_info->task_stat.overall_current_usage += size;
             if (task_info->task_stat.overall_current_usage > task_info->task_stat.overall_peak_usage) {
                 task_info->task_stat.overall_peak_usage = task_info->task_stat.overall_current_usage;
@@ -300,7 +309,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
                     }
 
                     /* add the alloc info to the list */
-                    create_new_alloc_stats_entry(heap_stats, NULL, task_handle, ptr, size);
+                    create_new_alloc_stats_entry(heap_stats, NULL, block_owner.task, ptr, size);
 
                     xSemaphoreGive(s_task_tracking_mutex);
                     return;
@@ -312,7 +321,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
         // since the list of task info is sorted by decreasing size, if the current task info
         // has a smaller task handle address than the one we are checking against, we can be sure
         // the task handle will not be found in the list, and we can break the loop.
-        if (task_info->task_stat.handle < task_handle) {
+        if (task_info->task_stat.handle < block_owner.task) {
             task_info = NULL;
             break;
         }
@@ -320,23 +329,26 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
 
     // No task entry was found OR no heap in the task entry was found.
     // Add the info to the list (either new task stats or new heap stat if task_info not NULL)
-    create_new_task_stats_entry(heap, task_handle, task_info, ptr, size, caps);
+    create_new_task_stats_entry(heap, block_owner.task, task_info, ptr, size, caps);
 
     xSemaphoreGive(s_task_tracking_mutex);
 }
 
 HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *old_ptr, void *new_ptr,
-                                                           size_t old_size, TaskHandle_t old_task,
+                                                           size_t old_size, heap_caps_block_owner_t old_block_owner,
                                                            size_t new_size, uint32_t caps)
 {
-    TaskHandle_t task_handle = xTaskGetCurrentTaskHandle();
     bool task_in_list = false;
     task_info_t *task_info = NULL;
     alloc_stats_t *alloc_stat = NULL;
 
+    void *new_block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(new_ptr);
+    MULTI_HEAP_GET_BLOCK_OWNER(new_block_owner_ptr) = get_current_block_owner();
+    heap_caps_block_owner_t new_block_owner = MULTI_HEAP_GET_BLOCK_OWNER(new_block_owner_ptr);
+
     xSemaphoreTake(s_task_tracking_mutex, portMAX_DELAY);
     SLIST_FOREACH(task_info, &task_stats, next_task_info) {
-        if (task_info->task_stat.handle == old_task) {
+        if (task_info->task_stat.handle == old_block_owner.task) {
             heap_stats_t *heap_stats = NULL;
             task_info->task_stat.overall_current_usage -= old_size;
             STAILQ_FOREACH(heap_stats, &task_info->heaps_stats, next_heap_stat) {
@@ -359,7 +371,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
             }
         }
 
-        if (task_info->task_stat.handle == task_handle && task_info->task_stat.is_alive) {
+        if (task_info->task_stat.handle == new_block_owner.task && task_info->task_stat.is_alive) {
             heap_stats_t *heap_stats = NULL;
             task_info->task_stat.overall_current_usage += new_size;
             STAILQ_FOREACH(heap_stats, &task_info->heaps_stats, next_heap_stat) {
@@ -370,7 +382,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
                         heap_stats->heap_stat.peak_usage = heap_stats->heap_stat.current_usage;
                     }
 
-                    create_new_alloc_stats_entry(heap_stats, alloc_stat, task_handle, new_ptr, new_size);
+                    create_new_alloc_stats_entry(heap_stats, alloc_stat, new_block_owner.task, new_ptr, new_size);
                     break;
                 }
             }
@@ -385,7 +397,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
     if (!task_in_list) {
         // No task entry was found OR no heap in the task entry was found.
         // Add the info to the list (either new task stats or new heap stat if task_info not NULL)
-        create_new_task_stats_entry(heap, task_handle, task_info, new_ptr, new_size, caps);
+        create_new_task_stats_entry(heap, new_block_owner.task, task_info, new_ptr, new_size, caps);
     }
 
     xSemaphoreGive(s_task_tracking_mutex);
@@ -394,8 +406,10 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
 HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
 {
     void *block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(ptr);
-    TaskHandle_t task_handle = MULTI_HEAP_GET_BLOCK_OWNER(block_owner_ptr);
-    if (!task_handle) {
+    heap_caps_block_owner_t block_owner = MULTI_HEAP_GET_BLOCK_OWNER(block_owner_ptr);
+    size_t size = multi_heap_get_full_block_size(heap->heap, block_owner_ptr);
+
+    if (!block_owner.task) {
         return;
     }
 
@@ -409,7 +423,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
     SLIST_FOREACH(task_info, &task_stats, next_task_info) {
         /* check all tasks (alive and deleted) since the free can come from any tasks,
          * not necessarily the one which allocated the memory. */
-        if (task_info->task_stat.handle == task_handle) {
+        if (task_info->task_stat.handle == block_owner.task) {
             heap_stats_t *heap_stats = NULL;
             alloc_stats_t *alloc_stat = NULL;
             /* find the matching heap */
@@ -427,8 +441,8 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
 
                     if (alloc_stat != NULL) {
                         heap_stats->heap_stat.alloc_count--;
-                        heap_stats->heap_stat.current_usage -= alloc_stat->alloc_stat.size;
-                        task_info->task_stat.overall_current_usage -= alloc_stat->alloc_stat.size;
+                        heap_stats->heap_stat.current_usage -= size;
+                        task_info->task_stat.overall_current_usage -= size;
                     }
                 }
             }
@@ -947,7 +961,8 @@ size_t heap_caps_get_per_task_info(heap_task_info_params_t *params)
             }
             void *p = multi_heap_get_block_address(b);  // Safe, only arithmetic
             size_t bsize = multi_heap_get_allocated_size(heap, p); // Validates
-            TaskHandle_t btask = MULTI_HEAP_GET_BLOCK_OWNER(p);
+            heap_caps_block_owner_t bowner = MULTI_HEAP_GET_BLOCK_OWNER(p);
+            TaskHandle_t btask = bowner.task;
             // Accumulate per-task allocation totals.
             if (params->totals) {
                 size_t i;

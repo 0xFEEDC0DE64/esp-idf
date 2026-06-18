@@ -169,7 +169,6 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_aligned_alloc_base(size_t alignment
                                                                  get_all_caps(heap));
 #endif
 
-                            MULTI_HEAP_SET_BLOCK_OWNER(ret);
                             ret = MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ret);
                             uint32_t *iptr = dram_alloc_to_iram_addr(ret, size + 4);  // int overflow checked above
                             CALL_HOOK(esp_heap_trace_alloc_hook, iptr, size, caps);
@@ -187,7 +186,6 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_aligned_alloc_base(size_t alignment
                                                                  get_all_caps(heap));
 #endif
 
-                            MULTI_HEAP_SET_BLOCK_OWNER(ret);
                             ret = MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ret);
                             CALL_HOOK(esp_heap_trace_alloc_hook, ret, size, caps);
                             return ret;
@@ -274,13 +272,11 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
 
 #if CONFIG_HEAP_TASK_TRACKING
         size_t old_size = multi_heap_get_full_block_size(heap->heap, ptr);
-        TaskHandle_t old_task = MULTI_HEAP_GET_BLOCK_OWNER(ptr);
+        heap_caps_block_owner_t old_task = MULTI_HEAP_GET_BLOCK_OWNER(ptr);
 #endif
 
         void *r = multi_heap_realloc(heap->heap, ptr, MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(size));
         if (r != NULL) {
-            MULTI_HEAP_SET_BLOCK_OWNER(r);
-
 #if CONFIG_HEAP_TASK_TRACKING
             heap_caps_update_per_task_info_realloc(heap,
                                                    MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ptr),

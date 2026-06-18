@@ -194,7 +194,6 @@ void heap_caps_init(void)
             if (heaps_array_allocation != NULL) {
 
                 // set block owner in head of heap block
-                MULTI_HEAP_SET_BLOCK_OWNER(heaps_array_allocation);
                 heaps_array = (heap_t *)MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(heaps_array_allocation);
 
                 // update used_heap to point into the newly allocated array
