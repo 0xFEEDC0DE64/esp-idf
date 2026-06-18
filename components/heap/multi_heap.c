@@ -88,7 +88,7 @@ typedef struct multi_heap_info {
     size_t minimum_free_bytes;
     size_t pool_size;
     void* heap_data;
-} heap_t;
+} heap_info_t;
 
 #if CONFIG_HEAP_TLSF_USE_ROM_IMPL
 
@@ -115,7 +115,7 @@ void multi_heap_in_rom_init(void)
 #else // CONFIG_HEAP_TLSF_USE_ROM_IMPL
 
 /* Check a block is valid for this heap. Used to verify parameters. */
-__attribute__((noinline)) NOCLONE_ATTR static void assert_valid_block(const heap_t *heap, const multi_heap_block_handle_t block)
+__attribute__((noinline)) NOCLONE_ATTR static void assert_valid_block(const heap_info_t *heap, const multi_heap_block_handle_t block)
 {
     pool_t pool = tlsf_get_pool(heap->heap_data);
     void *ptr = block_to_ptr(block);
@@ -138,18 +138,18 @@ size_t multi_heap_get_allocated_size_impl(multi_heap_handle_t heap, void *p)
 multi_heap_handle_t multi_heap_register_impl(void *start_ptr, size_t size)
 {
     assert(start_ptr);
-    if(size < (sizeof(heap_t))) {
+    if(size < (sizeof(heap_info_t))) {
         //Region too small to be a heap.
         return NULL;
     }
 
-    heap_t *result = (heap_t *)start_ptr;
-    size -= sizeof(heap_t);
+    heap_info_t *result = (heap_info_t *)start_ptr;
+    size -= sizeof(heap_info_t);
 
     /* Do not specify any maximum size for the allocations so that the default configuration is used */
     const size_t max_bytes = 0;
 
-    result->heap_data = tlsf_create_with_pool(start_ptr + sizeof(heap_t), size, max_bytes);
+    result->heap_data = tlsf_create_with_pool(start_ptr + sizeof(heap_info_t), size, max_bytes);
     if(!result->heap_data) {
         return NULL;
     }

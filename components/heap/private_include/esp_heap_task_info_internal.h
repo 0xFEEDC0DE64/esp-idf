@@ -11,9 +11,16 @@
 extern "C" {
 #endif
 
+// forward-declaration
+typedef struct heap_t_ heap_t;
+
+typedef struct {
+    TaskHandle_t task;
+} heap_caps_block_owner_t;
+
 void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr, size_t size, uint32_t caps);
 void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr);
-void heap_caps_update_per_task_info_realloc(heap_t *heap, void *old_ptr, void *new_ptr, size_t old_size, TaskHandle_t old_task, size_t new_size, uint32_t caps);
+void heap_caps_update_per_task_info_realloc(heap_t *heap, void *old_ptr, void *new_ptr, size_t old_size, heap_caps_block_owner_t old_block_owner, size_t new_size, uint32_t caps);
 
 #ifdef __cplusplus
 }
