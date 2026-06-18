@@ -66,15 +66,14 @@ inline static void multi_heap_assert(bool condition, const char *format, int lin
 
 #ifdef CONFIG_HEAP_TASK_TRACKING
 #include <freertos/task.h>
-#define MULTI_HEAP_SET_BLOCK_OWNER(HEAD) *((TaskHandle_t*)HEAD) = xTaskGetCurrentTaskHandle()
-#define MULTI_HEAP_GET_BLOCK_OWNER(HEAD) *((TaskHandle_t*)HEAD)
-#define MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(HEAD) ((TaskHandle_t*)(HEAD) + 1)
-#define MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(HEAD) ((TaskHandle_t*)(HEAD) - 1)
-#define MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(SIZE) ((SIZE) + sizeof(TaskHandle_t))
-#define MULTI_HEAP_REMOVE_BLOCK_OWNER_SIZE(SIZE) ((SIZE) - sizeof(TaskHandle_t))
-#define MULTI_HEAP_BLOCK_OWNER_SIZE() sizeof(TaskHandle_t)
+#include "esp_heap_task_info_internal.h"
+#define MULTI_HEAP_GET_BLOCK_OWNER(HEAD) *((heap_caps_block_owner_t*)HEAD)
+#define MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(HEAD) ((heap_caps_block_owner_t*)(HEAD) + 1)
+#define MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(HEAD) ((heap_caps_block_owner_t*)(HEAD) - 1)
+#define MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(SIZE) ((SIZE) + sizeof(heap_caps_block_owner_t))
+#define MULTI_HEAP_REMOVE_BLOCK_OWNER_SIZE(SIZE) ((SIZE) - sizeof(heap_caps_block_owner_t))
+#define MULTI_HEAP_BLOCK_OWNER_SIZE() sizeof(heap_caps_block_owner_t)
 #else
-#define MULTI_HEAP_SET_BLOCK_OWNER(HEAD)
 #define MULTI_HEAP_GET_BLOCK_OWNER(HEAD) (NULL)
 #define MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(HEAD) (HEAD)
 #define MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(HEAD) (HEAD)
