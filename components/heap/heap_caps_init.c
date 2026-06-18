@@ -180,6 +180,7 @@ void heap_caps_init(void)
        Allocate this part of data contiguously, even though it's a linked list... */
     assert(SLIST_EMPTY(&registered_heaps));
 
+    void *heaps_array_allocation = NULL;
     heap_t *heaps_array = NULL;
     heap_t *used_heap = NULL;
     for (size_t i = 0; i < num_heaps; i++) {
@@ -189,15 +190,20 @@ void heap_caps_init(void)
              * the allocated block won't include the block owner bytes since this operation
              * is done by the top level API heap_caps_malloc(). So we need to add it manually
              * after successful allocation. Allocate extra 4 bytes for that purpose. */
-            heaps_array = multi_heap_malloc(used_heap->heap, MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(sizeof(heap_t) * num_heaps));
-            if (heaps_array != NULL) {
+            heaps_array_allocation = multi_heap_malloc(used_heap->heap, MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(sizeof(heap_t) * num_heaps));
+            if (heaps_array_allocation != NULL) {
+
+                // set block owner in head of heap block
+                MULTI_HEAP_SET_BLOCK_OWNER(heaps_array_allocation);
+                heaps_array = (heap_t *)MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(heaps_array_allocation);
+
+                // update used_heap to point into the newly allocated array
+                used_heap = heaps_array + i;
                 break;
             }
         }
     }
     assert(heaps_array != NULL); /* if NULL, there's not enough free startup heap space */
-    MULTI_HEAP_SET_BLOCK_OWNER(heaps_array);
-    heaps_array = (heap_t *)MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(heaps_array);
 
     memcpy(heaps_array, temp_heaps, sizeof(heap_t)*num_heaps);
 
@@ -217,8 +223,8 @@ void heap_caps_init(void)
 
 #if CONFIG_HEAP_TASK_TRACKING
     heap_caps_update_per_task_info_alloc(used_heap,
-                                         MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(heaps_array),
-                                         multi_heap_get_full_block_size(used_heap->heap, MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(heaps_array)),
+                                         MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(heaps_array_allocation),
+                                         multi_heap_get_full_block_size(used_heap->heap, heaps_array_allocation),
                                          get_all_caps(used_heap));
 #endif
 }
