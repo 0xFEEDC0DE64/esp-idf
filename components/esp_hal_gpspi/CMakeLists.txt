@@ -1,11 +1,12 @@
 idf_build_get_property(target IDF_TARGET)
 
 set(srcs)
-set(includes "include")
+set(includes)
 
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/${target}/include")
     list(APPEND includes "${target}/include")
 endif()
+list(APPEND includes "include")
 
 if(CONFIG_SOC_GPSPI_SUPPORTED)
     list(APPEND srcs
