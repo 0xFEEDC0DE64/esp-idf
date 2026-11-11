@@ -1172,6 +1172,20 @@ esp_err_t i2c_new_master_bus(const i2c_master_bus_config_t *bus_config, i2c_mast
 
     *ret_bus_handle = i2c_master;
     s_platform.handle[i2c_port_num] = i2c_master;
+
+    // HACK: when ESP32 is reset while an I2C transaction is ongoing, we need
+    // to reset the I2C hardware to clear any old state.
+    //
+    // This is a hack and not a fix because a similar check actually exists
+    // before every I2C transaction, but somehow spurious TIMEOUT values still
+    // appear and break the transactions. If we reset it both here and in
+    // s_i2c_transaction_start() then it seems to be enough.
+    if (i2c_ll_is_bus_busy(hal->dev)) {
+        ESP_LOGW(TAG, "i2c_new_master_bus: bus is still busy, calling fsm reset");
+        ret = s_i2c_hw_fsm_reset(i2c_master, true);
+        ESP_GOTO_ON_ERROR(ret, err, TAG, "reset hardware failed");
+    }
+
     return ESP_OK;
 
 err:
