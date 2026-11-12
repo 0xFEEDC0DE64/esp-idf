@@ -27,8 +27,11 @@
  */
 static portMUX_TYPE s_task_tracking_mux = portMUX_INITIALIZER_UNLOCKED;
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 typedef heap_caps_block_owner_t alloc_stats_t;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 /**
  * @brief Internal singly linked list used to gather information of the heap used
  * by a given task.
@@ -44,6 +47,7 @@ typedef struct heap_stats {
     SLIST_HEAD(alloc_stats_ll, heap_caps_block_owner) allocs_stats;
     SLIST_ENTRY(heap_stats) next_heap_stat;
 } heap_stats_t;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
 /** @brief Internal singly linked list used to gather information on all created
  * tasks since startup.
@@ -56,8 +60,10 @@ typedef struct task_stats {
     bool is_alive;
     size_t overall_peak_usage;
     size_t overall_current_usage;
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     size_t heap_count;
     SLIST_HEAD(heap_stats_ll, heap_stats) heaps_stats;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     SLIST_ENTRY(task_stats) next_task_info;
 } task_info_t;
 
@@ -97,6 +103,7 @@ static void copy_task_name(char * buf, size_t buf_size, TaskHandle_t task_handle
     }
 }
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 /**
  * @brief Add allocation to linked list
  *
@@ -118,7 +125,9 @@ static HEAP_IRAM_ATTR void unlink_alloc_entry(heap_stats_t *heap_stats, alloc_st
 {
     SLIST_REMOVE(&heap_stats->allocs_stats, block_owner_ptr, heap_caps_block_owner, next_alloc);
 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 /**
  * @brief Create a new heap stats entry object
  *
@@ -153,8 +162,11 @@ static HEAP_IRAM_ATTR void create_new_heap_stats_entry(heap_t *used_heap, task_i
     task_stats->heap_count += 1;
     SLIST_INSERT_HEAD(&task_stats->heaps_stats, heap_stats, next_heap_stat);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
     link_alloc_entry(heap_stats, block_owner_ptr);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
 /**
  * @brief Create a new task info entry in task_stats.
@@ -179,9 +191,11 @@ static HEAP_IRAM_ATTR task_info_t * create_new_task_stats_entry(TaskHandle_t tas
     task_info->is_alive = true;
     task_info->overall_peak_usage = 0;
     task_info->overall_current_usage = 0;
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     task_info->heap_count = 0;
     // create the heap stats for the new task entry
     SLIST_INIT(&task_info->heaps_stats);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
     SLIST_INSERT_HEAD(&task_stats, task_info, next_task_info);
 
@@ -285,6 +299,7 @@ static HEAP_IRAM_ATTR void delete_task_info_entry(task_info_t *task_info)
     // pointer used to free the memory of the statistics
     heap_t *containing_heap = NULL;
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     heap_stats_t *current_heap_stat = SLIST_FIRST(&task_info->heaps_stats);
     heap_stats_t *prev_heap_stat = NULL;
 
@@ -293,6 +308,7 @@ static HEAP_IRAM_ATTR void delete_task_info_entry(task_info_t *task_info)
         prev_heap_stat = current_heap_stat;
         current_heap_stat = SLIST_NEXT(current_heap_stat, next_heap_stat);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
         /* remove all entries from heap_stats->allocs_stats */
         alloc_stats_t *alloc_stat = NULL;
         while ((alloc_stat = SLIST_FIRST( &prev_heap_stat->allocs_stats)) != NULL) {
@@ -301,6 +317,7 @@ static HEAP_IRAM_ATTR void delete_task_info_entry(task_info_t *task_info)
             alloc_stat->task_info = NULL; // avoid task linking to a dangling pointer
         }
         if (!SLIST_EMPTY(&prev_heap_stat->allocs_stats)) continue;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
         task_info->heap_count--;
         SLIST_REMOVE(&task_info->heaps_stats, prev_heap_stat, heap_stats, next_heap_stat);
@@ -310,8 +327,11 @@ static HEAP_IRAM_ATTR void delete_task_info_entry(task_info_t *task_info)
             multi_heap_free(containing_heap->heap, prev_heap_stat);
         }
     }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     if (!SLIST_EMPTY(&task_info->heaps_stats)) return;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
     // free the memory of the task stat
     containing_heap = find_containing_heap(task_info);
@@ -334,6 +354,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
             task_info->overall_peak_usage = task_info->overall_current_usage;
         }
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         bool heap_found = false;
         heap_stats_t *heap_stats = NULL;
         /* find the heap in the list and update the overall stats */
@@ -347,8 +368,10 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
                     heap_stats->peak_usage = heap_stats->current_usage;
                 }
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
                 /* add the alloc info to the list */
                 link_alloc_entry(heap_stats, block_owner_ptr);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
                 break;
             }
@@ -357,6 +380,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
         if (!heap_found) {
             create_new_heap_stats_entry(heap, task_info, block_owner_ptr, size, caps);
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     }
 
     portEXIT_CRITICAL_SAFE(&s_task_tracking_mux);
@@ -368,16 +392,26 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
 {
     portENTER_CRITICAL_SAFE(&s_task_tracking_mux);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
     void *old_block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(old_ptr);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
     task_info_t * old_task_info = find_task_stats_entry_for_block(old_block_owner);
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
     alloc_stats_t *alloc_stat = NULL;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
     if (old_task_info != NULL) {
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
         bool allocation_found = false;
+#else // !defined(CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION)
+        bool allocation_found = true;
+#endif // !defined(CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION)
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         heap_stats_t * heap_stats = NULL;
         SLIST_FOREACH(heap_stats, &old_task_info->heaps_stats, next_heap_stat) {
             if (heap_stats->heap == heap->heap) {
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
                 /* remove the alloc from the list. The updated alloc stats are added later
                  * in the function */
                 SLIST_FOREACH(alloc_stat, &heap_stats->allocs_stats, next_alloc) {
@@ -387,6 +421,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
                         break;
                     }
                 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
                 if (allocation_found) {
                     heap_stats->current_usage -= old_size;
@@ -396,6 +431,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
                 break;
             }
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
         if (allocation_found) {
             old_task_info->overall_current_usage -= old_size;
@@ -411,6 +447,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
             new_task_info->overall_peak_usage = new_task_info->overall_current_usage;
         }
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         bool heap_found = false;
         heap_stats_t * heap_stats = NULL;
         SLIST_FOREACH(heap_stats, &new_task_info->heaps_stats, next_heap_stat) {
@@ -423,7 +460,9 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
                     heap_stats->peak_usage = heap_stats->current_usage;
                 }
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
                 link_alloc_entry(heap_stats, alloc_stat);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
                 break;
             }
@@ -432,6 +471,8 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
         if (!heap_found) {
             create_new_heap_stats_entry(heap, new_task_info, new_block_owner_ptr, new_size, caps);
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+
     }
 
     portEXIT_CRITICAL_SAFE(&s_task_tracking_mux);
@@ -460,11 +501,17 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
     task_info_t * task_info = find_task_stats_entry_for_block(block_owner);
 
     if (task_info != NULL) {
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
         bool allocation_found = false;
+#else // !defined(CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION)
+        bool allocation_found = true;
+#endif // !defined(CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION)
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         heap_stats_t * heap_stats = NULL;
         SLIST_FOREACH(heap_stats, &task_info->heaps_stats, next_heap_stat) {
             if (heap_stats->heap == heap->heap) {
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
                 /* remove the alloc from the list */
                 alloc_stats_t *alloc_stat = NULL;
                 SLIST_FOREACH(alloc_stat, &heap_stats->allocs_stats, next_alloc) {
@@ -474,6 +521,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
                         break;
                     }
                 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
                 if (allocation_found) {
                     heap_stats->current_usage -= size;
@@ -483,6 +531,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
                 break;
             }
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
         if (allocation_found) {
             task_info->overall_current_usage -= size;
@@ -500,6 +549,7 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
 #endif // !CONFIG_HEAP_TRACK_DELETED_TASKS
 }
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 static heap_task_block_t capture_alloc_stats(task_info_t * task_info, heap_stats_t * heap_info, alloc_stats_t * alloc_stats) {
     return (heap_task_block_t) {
         .task = task_info->handle,
@@ -507,7 +557,9 @@ static heap_task_block_t capture_alloc_stats(task_info_t * task_info, heap_stats
         .size = multi_heap_get_full_block_size(heap_info->heap, alloc_stats),
     };
 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 static heap_stat_t capture_heap_stats(heap_stats_t * heap_info) {
     return (heap_stat_t) {
         .name = heap_info->name,
@@ -519,6 +571,7 @@ static heap_stat_t capture_heap_stats(heap_stats_t * heap_info) {
         .alloc_stat = NULL,
     };
 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
 static task_stat_t capture_task_stats(task_info_t * task_info) {
     task_stat_t stat = {
@@ -526,8 +579,10 @@ static task_stat_t capture_task_stats(task_info_t * task_info) {
         .is_alive = task_info->is_alive,
         .overall_peak_usage = task_info->overall_peak_usage,
         .overall_current_usage = task_info->overall_current_usage,
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         .heap_count = task_info->heap_count,
         .heap_stat = NULL,
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     };
 
 #ifdef CONFIG_HEAP_TRACK_DELETED_TASKS
@@ -565,6 +620,7 @@ esp_err_t heap_caps_get_all_task_stat(heap_all_tasks_stat_t *tasks_stat)
         task_stat_t *current_task_stat = &tasks_stat->stat_arr[task_index++];
         *current_task_stat = capture_task_stats(task_info);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         // If no more heap stat entries in the array are available, just proceed
         // with filling task stats but skip filling info on heap stat and alloc stat.
         if (heap_index + task_info->heap_count > tasks_stat->heap_count) {
@@ -586,6 +642,7 @@ esp_err_t heap_caps_get_all_task_stat(heap_all_tasks_stat_t *tasks_stat)
                 heap_stat_t *current_heap_stat = &current_task_stat->heap_stat[h_index++];
                 *current_heap_stat = capture_heap_stats(heap_info);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
                 // increase alloc_index before filling the alloc info of the given heap
                 // to avoid running out of alloc stat entry while doing it.
                 if (alloc_index + heap_info->alloc_count > tasks_stat->alloc_count) {
@@ -604,10 +661,12 @@ esp_err_t heap_caps_get_all_task_stat(heap_all_tasks_stat_t *tasks_stat)
 
                     alloc_index += heap_info->alloc_count;
                 }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
                 heap_info = SLIST_NEXT(heap_info, next_heap_stat);
             }
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     }
 
     portEXIT_CRITICAL_SAFE(&s_task_tracking_mux);
@@ -650,6 +709,7 @@ esp_err_t heap_caps_get_single_task_stat(heap_single_task_stat_t *task_stat, Tas
     size_t heap_index = 0;
     size_t alloc_index = 0;
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     task_stat->stat.heap_stat = task_stat->heap_stat_start;
 
     // copy the stats of the different heaps the task has used and the different blocks
@@ -669,6 +729,7 @@ esp_err_t heap_caps_get_single_task_stat(heap_single_task_stat_t *task_stat, Tas
         heap_stat_t *current_heap_stat = &task_stat->stat.heap_stat[heap_index++];
         *current_heap_stat = capture_heap_stats(heap_info);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
         // increase alloc_index before filling the block info of the given heap
         // to avoid running out of block stat entry while doing it.
         if (alloc_index + heap_info->alloc_count > task_stat->alloc_count) {
@@ -688,10 +749,12 @@ esp_err_t heap_caps_get_single_task_stat(heap_single_task_stat_t *task_stat, Tas
 
             alloc_index += heap_info->alloc_count;
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
 
         heap_info = SLIST_NEXT(heap_info, next_heap_stat);
     }
     portEXIT_CRITICAL_SAFE(&s_task_tracking_mux);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
     task_stat->heap_count = heap_index;
     task_stat->alloc_count = alloc_index;
@@ -722,6 +785,7 @@ static void heap_caps_print_task_info(FILE *stream, const task_stat_t *task_stat
                                                                                                       task_stat->overall_peak_usage,
                                                                                                       task_stat->heap_count);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     for (size_t heap_index = 0; heap_index < heap_count; heap_index++) {
         const heap_stat_t *heap_stat = &task_stat->heap_stat[heap_index];
         const bool is_last_heap_stat = (heap_index + 1 == heap_count);
@@ -739,6 +803,7 @@ static void heap_caps_print_task_info(FILE *stream, const task_stat_t *task_stat
                 (heap_stat->peak_usage * 100) / heap_stat->size,
                 heap_stat->alloc_count);
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
         // the alloc statistics are not available when the snapshot could not hold them all
         if (heap_stat->alloc_stat == NULL) {
             continue;
@@ -750,7 +815,9 @@ static void heap_caps_print_task_info(FILE *stream, const task_stat_t *task_stat
                                                                 heap_stat->alloc_stat[alloc_index].address,
                                                                 heap_stat->alloc_stat[alloc_index].size);
         }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_ALLOCATION
     }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 }
 
 static void heap_caps_print_task_overview(FILE *stream, const task_stat_t *task_stat, bool is_first_task_info, bool is_last_task_info)
@@ -893,6 +960,7 @@ static esp_err_t alloc_stat_arrays_for_single_task(heap_single_task_stat_t *task
     task_stat->heap_count = 0;
     task_stat->alloc_count = 0;
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     task_info_t *task_info = NULL;
 
     portENTER_CRITICAL_SAFE(&s_task_tracking_mux);
@@ -907,6 +975,7 @@ static esp_err_t alloc_stat_arrays_for_single_task(heap_single_task_stat_t *task
         }
     }
     portEXIT_CRITICAL_SAFE(&s_task_tracking_mux);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
     // allocate the memory used to store the statistics of allocs, heaps
     if (task_stat->heap_count != 0) {
@@ -959,6 +1028,7 @@ esp_err_t heap_caps_alloc_all_task_stat_arrays(heap_all_tasks_stat_t *tasks_stat
     tasks_stat->heap_count = 0;
     tasks_stat->alloc_count = 0;
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     task_info_t *task_info = NULL;
 
     portENTER_CRITICAL_SAFE(&s_task_tracking_mux);
@@ -972,6 +1042,7 @@ esp_err_t heap_caps_alloc_all_task_stat_arrays(heap_all_tasks_stat_t *tasks_stat
         }
     }
     portEXIT_CRITICAL_SAFE(&s_task_tracking_mux);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
     // allocate the memory used to store the statistics of allocs, heaps and tasks
     if (tasks_stat->task_count != 0) {

@@ -104,6 +104,20 @@ menu "Heap memory debugging"
             Note: Allocating or freeing memory or using the task tracking API will lead to a crash when the
             scheduler is not working (e.g, after calling vTaskSuspendAll).
 
+    config HEAP_TASK_TRACKING_PER_HEAP
+        bool "Enable heap task tracking per-heap information"
+        depends on HEAP_TASK_TRACKING
+        default y
+        help
+            Enables tracking which heaps each task allocated in.
+
+    config HEAP_TASK_TRACKING_PER_ALLOCATION
+        bool "Enable heap task tracking per-allocation information"
+        depends on HEAP_TASK_TRACKING_PER_HEAP
+        default y
+        help
+            Enables tracking a list of allocations of each task.
+
     config HEAP_TRACK_DELETED_TASKS
         bool "Keep information about the memory usage of deleted tasks"
         depends on HEAP_TASK_TRACKING
