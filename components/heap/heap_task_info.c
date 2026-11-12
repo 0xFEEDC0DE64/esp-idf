@@ -45,6 +45,19 @@ typedef struct heap_stats {
 } heap_stats_t;
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+/**
+ * @brief Internal singly linked list used to gather information of the heap used
+ * by a given subtask.
+ */
+typedef struct subtask_stats {
+    const char * name;
+    size_t peak_usage;
+    size_t current_usage;
+    SLIST_ENTRY(subtask_stats) next_subtask_stat;
+} subtask_stats_t;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+
 /** @brief Internal singly linked list used to gather information on all created
  * tasks since startup.
  */
@@ -56,6 +69,10 @@ typedef struct task_stats {
     bool is_alive;
     size_t overall_peak_usage;
     size_t overall_current_usage;
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    size_t subtask_count;
+    SLIST_HEAD(subtask_stats_ll, subtask_stats) subtasks_stats;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 #ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     size_t heap_count;
     SLIST_HEAD(heap_stats_ll, heap_stats) heaps_stats;
@@ -88,8 +105,38 @@ FORCE_INLINE_ATTR heap_t* find_biggest_heap(void)
 static heap_caps_block_owner_t get_initial_block_owner(void) {
     return (heap_caps_block_owner_t) {
         .task_info = NULL, // initially this will always be NULL, updated later
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        .subtask = heap_caps_get_user_subtask(),
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
     };
 }
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+static bool global_subtask_initialized = false;
+static __thread const char * current_thread_subtask = NULL;
+extern const char * heap_caps_set_user_subtask(const char * name) {
+    const char * old_subtask = current_thread_subtask;
+    current_thread_subtask = name;
+    global_subtask_initialized = true;
+    return old_subtask;
+}
+
+extern const char * heap_caps_get_user_subtask(void) {
+    if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING && global_subtask_initialized) {
+        return current_thread_subtask;
+    } else {
+        return NULL;
+    }
+}
+
+extern void heap_caps_cleanup_user_subtask(const char ** p_subtask) {
+    const char * subtask = *p_subtask;
+    if (subtask) {
+        *p_subtask = NULL;
+        heap_caps_set_user_subtask(subtask);
+    }
+}
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
 static void copy_task_name(char * buf, size_t buf_size, TaskHandle_t task_handle) {
     if (task_handle == NULL) {
@@ -164,6 +211,35 @@ static HEAP_IRAM_ATTR void create_new_heap_stats_entry(heap_t *used_heap, task_i
 }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+/**
+ * @brief Create a new subtask stats entry object
+ *
+ * @param subtask_name The subtask name
+ * @param task_stats The task statistics of the task that triggered the allocation
+ */
+static HEAP_IRAM_ATTR void create_new_subtask_stats_entry(const char * subtask_name, task_info_t *task_stats, size_t size)
+{
+    // find the heap with the most available free memory to store the statistics
+    heap_t *heap_used_for_alloc = find_biggest_heap();
+
+    // init the list of subtasks with a new entry in task_stats->subtasks_stats. No need
+    // to memset the memory since all fields will be set later in the function.
+    subtask_stats_t *subtask_stats = multi_heap_malloc(heap_used_for_alloc->heap, sizeof(subtask_stats_t));
+    if (!subtask_stats) {
+        ESP_LOGE(TAG, "Could not allocate memory to add new task statistics");
+        return;
+    }
+
+    subtask_stats->name = subtask_name;
+    subtask_stats->current_usage = size;
+    subtask_stats->peak_usage = size;
+
+    task_stats->subtask_count += 1;
+    SLIST_INSERT_HEAD(&task_stats->subtasks_stats, subtask_stats, next_subtask_stat);
+}
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+
 /**
  * @brief Create a new task info entry in task_stats.
  *
@@ -187,6 +263,11 @@ static HEAP_IRAM_ATTR task_info_t * create_new_task_stats_entry(TaskHandle_t tas
     task_info->is_alive = true;
     task_info->overall_peak_usage = 0;
     task_info->overall_current_usage = 0;
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    task_info->subtask_count = 0;
+    // create the subtask stats tailq for the new task entry
+    SLIST_INIT(&task_info->subtasks_stats);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 #ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     task_info->heap_count = 0;
     // create the heap stats for the new task entry
@@ -314,9 +395,31 @@ static HEAP_IRAM_ATTR void delete_task_info_entry(task_info_t *task_info)
     }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    subtask_stats_t *current_subtask_stat = SLIST_FIRST(&task_info->subtasks_stats);
+    subtask_stats_t *prev_subtask_stat = NULL;
+
+    // remove all entries from task_info->subtasks_stats and free the memory
+    while(current_subtask_stat != NULL) {
+        prev_subtask_stat = current_subtask_stat;
+        current_subtask_stat = SLIST_NEXT(current_subtask_stat, next_subtask_stat);
+
+        task_info->subtask_count--;
+        SLIST_REMOVE(&task_info->subtasks_stats, prev_subtask_stat, subtask_stats, next_subtask_stat);
+        containing_heap = find_containing_heap(prev_subtask_stat);
+        // prev_subtask_stat must be allocated somewhere
+        if (containing_heap != NULL) {
+            multi_heap_free(containing_heap->heap, prev_subtask_stat);
+        }
+    }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+
 #ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
     if (!SLIST_EMPTY(&task_info->heaps_stats)) return;
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    if (!SLIST_EMPTY(&task_info->subtasks_stats)) return;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     // remove task_info from task_stats (and free the memory)
     SLIST_REMOVE(&task_stats, task_info, task_stats, next_task_info);
@@ -338,6 +441,9 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
 
     void *block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(ptr);
     task_info_t * task_info = find_or_create_new_task_stats_entry(block_owner_ptr, xTaskGetCurrentTaskHandle());
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    heap_caps_block_owner_t block_owner = MULTI_HEAP_GET_BLOCK_OWNER(block_owner_ptr);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     if (task_info != NULL) {
         task_info->overall_current_usage += size;
@@ -372,6 +478,27 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_alloc(heap_t *heap, void *ptr
             create_new_heap_stats_entry(heap, task_info, block_owner_ptr, size, caps);
         }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        bool subtask_found = false;
+        subtask_stats_t *subtask_stats = NULL;
+        /* find the subtask in the list and update the overall stats */
+        SLIST_FOREACH(subtask_stats, &task_info->subtasks_stats, next_subtask_stat) {
+            if (subtask_stats->name == block_owner.subtask) {
+                subtask_stats->current_usage += size;
+                if (subtask_stats->current_usage > subtask_stats->peak_usage) {
+                    subtask_stats->peak_usage = subtask_stats->current_usage;
+                }
+
+                subtask_found = true;
+                break;
+            }
+        }
+
+        if (!subtask_found) {
+            create_new_subtask_stats_entry(block_owner.subtask, task_info, size);
+        }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
     }
 
     xSemaphoreGive(s_task_tracking_mutex);
@@ -424,6 +551,19 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
         }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        subtask_stats_t *subtask_stats = NULL;
+        SLIST_FOREACH(subtask_stats, &old_task_info->subtasks_stats, next_subtask_stat) {
+            if (subtask_stats->name == old_block_owner.subtask) {
+                if (allocation_found) {
+                    subtask_stats->current_usage -= old_size;
+                }
+
+                break;
+            }
+        }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+
         if (allocation_found) {
             old_task_info->overall_current_usage -= old_size;
         }
@@ -437,6 +577,9 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
 
     void *new_block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(new_ptr);
     task_info_t * new_task_info = find_or_create_new_task_stats_entry(new_block_owner_ptr, xTaskGetCurrentTaskHandle());
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    heap_caps_block_owner_t new_block_owner = MULTI_HEAP_GET_BLOCK_OWNER(new_block_owner_ptr);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     if (new_task_info != NULL) {
         new_task_info->overall_current_usage += new_size;
@@ -469,6 +612,27 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_realloc(heap_t *heap, void *o
             create_new_heap_stats_entry(heap, new_task_info, new_block_owner_ptr, new_size, caps);
         }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        bool subtask_found = false;
+        subtask_stats_t *subtask_stats = NULL;
+        /* find the subtask in the list and update the overall stats */
+        SLIST_FOREACH(subtask_stats, &new_task_info->subtasks_stats, next_subtask_stat) {
+            if (subtask_stats->name == new_block_owner.subtask) {
+                subtask_stats->current_usage += new_size;
+                if (subtask_stats->current_usage > subtask_stats->peak_usage) {
+                    subtask_stats->peak_usage = subtask_stats->current_usage;
+                }
+
+                subtask_found = true;
+                break;
+            }
+        }
+
+        if (!subtask_found) {
+            create_new_subtask_stats_entry(new_block_owner.subtask, new_task_info, new_size);
+        }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
 #if CONFIG_HEAP_TRACK_DELETED_TASKS && !CONFIG_HEAP_TRACK_DELETED_TASKS_WITHOUT_ALLOCATIONS
         if (!old_task_info->is_alive && old_task_info->overall_current_usage == 0) {
@@ -539,6 +703,19 @@ HEAP_IRAM_ATTR void heap_caps_update_per_task_info_free(heap_t *heap, void *ptr)
         }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        subtask_stats_t *subtask_stats = NULL;
+        SLIST_FOREACH(subtask_stats, &task_info->subtasks_stats, next_subtask_stat) {
+            if (subtask_stats->name == block_owner.subtask) {
+                if (allocation_found) {
+                    subtask_stats->current_usage -= size;
+                }
+
+                break;
+            }
+        }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+
         if (allocation_found) {
             task_info->overall_current_usage -= size;
         }
@@ -577,12 +754,26 @@ static heap_stat_t capture_heap_stats(heap_stats_t * heap_info) {
 }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+static subtask_stat_t capture_subtask_stats(subtask_stats_t * subtask_info) {
+    return (subtask_stat_t) {
+        .name = subtask_info->name,
+        .peak_usage = subtask_info->peak_usage,
+        .current_usage = subtask_info->current_usage,
+    };
+}
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+
 static task_stat_t capture_task_stats(task_info_t * task_info) {
     task_stat_t stat = {
         .handle = task_info->handle,
         .is_alive = task_info->is_alive,
         .overall_peak_usage = task_info->overall_peak_usage,
         .overall_current_usage = task_info->overall_current_usage,
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        .subtask_count = task_info->subtask_count,
+        .subtask_stat = NULL,
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 #ifdef CONFIG_HEAP_TASK_TRACKING_PER_HEAP
         .heap_count = task_info->heap_count,
         .heap_stat = NULL,
@@ -607,6 +798,13 @@ esp_err_t heap_caps_get_all_task_stat(heap_all_tasks_stat_t *tasks_stat)
         (tasks_stat->alloc_stat_start == NULL && tasks_stat->alloc_count != 0)) {
         return ESP_ERR_INVALID_ARG;
     }
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    if (tasks_stat->subtask_stat_start == NULL && tasks_stat->subtask_count != 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    size_t subtask_index = 0;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     size_t task_index = 0;
     size_t heap_index = 0;
@@ -671,6 +869,31 @@ esp_err_t heap_caps_get_all_task_stat(heap_all_tasks_stat_t *tasks_stat)
             }
         }
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        // If no more subtask stat entries in the array are available, just proceed
+        // with filling task stats but skip filling info on subtask stat and alloc stat.
+        if (subtask_index + task_info->subtask_count > tasks_stat->subtask_count) {
+            current_task_stat->subtask_stat = NULL;
+        } else if (task_info->subtask_count == 1 && SLIST_FIRST(&task_info->subtasks_stats)->name == NULL) {
+            // skip if only the trivial (null) subtask exists to avoid wasting subtask_stat entries
+            current_task_stat->subtask_count = 0;
+            current_task_stat->subtask_stat = NULL;
+        } else {
+            // set the pointer where the subtask info for the given task will
+            // be in the user array
+            current_task_stat->subtask_stat = tasks_stat->subtask_stat_start + subtask_index;
+            subtask_index += task_info->subtask_count;
+
+            // copy the stats of the different subtasks the task has used.
+            size_t s_index = 0;
+            subtask_stats_t *subtask_info = SLIST_FIRST(&task_info->subtasks_stats);
+            while(s_index < task_info->subtask_count && subtask_info != NULL) {
+                current_task_stat->subtask_stat[s_index++] = capture_subtask_stats(subtask_info);
+                subtask_info = SLIST_NEXT(subtask_info, next_subtask_stat);
+            }
+        }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
     }
 
     xSemaphoreGive(s_task_tracking_mutex);
@@ -678,6 +901,10 @@ esp_err_t heap_caps_get_all_task_stat(heap_all_tasks_stat_t *tasks_stat)
     tasks_stat->task_count = task_index;
     tasks_stat->heap_count = heap_index;
     tasks_stat->alloc_count = alloc_index;
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    tasks_stat->subtask_count = subtask_index;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     return ESP_OK;
 }
@@ -689,6 +916,12 @@ esp_err_t heap_caps_get_single_task_stat(heap_single_task_stat_t *task_stat, Tas
         (task_stat->alloc_stat_start == NULL && task_stat->alloc_count != 0)) {
         return ESP_ERR_INVALID_ARG;
     }
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    if (task_stat->subtask_stat_start == NULL && task_stat->subtask_count != 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     if (task_handle == NULL) {
         task_handle = xTaskGetCurrentTaskHandle();
@@ -759,6 +992,40 @@ esp_err_t heap_caps_get_single_task_stat(heap_single_task_stat_t *task_stat, Tas
     }
     xSemaphoreGive(s_task_tracking_mutex);
 #endif // CONFIG_HEAP_TASK_TRACKING_PER_HEAP
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    task_stat->stat.subtask_stat = task_stat->subtask_stat_start;
+
+    // copy the stats of the different heaps the task has used and the different blocks
+    // allocated in those heaps. If the number of entries remaining for block stats is
+    // inferior to the number of blocks allocated on the current heap no block stat will
+    // be copied at all.
+
+    size_t subtask_index = 0;
+
+    xSemaphoreTake(s_task_tracking_mutex, portMAX_DELAY);
+    subtask_stats_t *subtask_info = SLIST_FIRST(&task_info->subtasks_stats);
+    if (task_info->subtask_count == 1 && subtask_info->name == NULL) {
+        // skip if only the trivial (null) subtask exists to avoid wasting subtask_stat entries
+        task_stat->stat.subtask_count = 0;
+        task_stat->stat.subtask_stat = NULL;
+    } else {
+        // otherwise copy subtask stats
+        while (subtask_index < task_info->subtask_count && subtask_info != NULL) {
+            // check that there is enough subtask_stat entry left to add another one to the user defined
+            // array of subtask_stat
+            if (subtask_index >= task_stat->subtask_count) {
+                break;
+            }
+
+            task_stat->stat.subtask_stat[subtask_index++] = capture_subtask_stats(subtask_info);
+            subtask_info = SLIST_NEXT(subtask_info, next_subtask_stat);
+        }
+    }
+    xSemaphoreGive(s_task_tracking_mutex);
+
+    task_stat->subtask_count = subtask_index;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
     task_stat->heap_count = heap_index;
     task_stat->alloc_count = alloc_index;
