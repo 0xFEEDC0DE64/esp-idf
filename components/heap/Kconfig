@@ -131,6 +131,19 @@ menu "Heap memory debugging"
 
             Note that this feature cannot keep track of a task deletion if the task is allocated statically
 
+    config HEAP_TRACK_DELETED_TASKS_WITHOUT_ALLOCATIONS
+        bool "Keep information about the memory usage of deleted tasks without allocations"
+        depends on HEAP_TRACK_DELETED_TASKS
+        default y
+        help
+            When enabled, this configuration allows the user to keep trace of the memory usage
+            of a task that has been deleted, but still has open allocations.
+
+            This allows the user to verify that no memory allocated within a task remains unfreed
+            before terminating the task
+
+            Note that this feature cannot keep track of a task deletion if the task is allocated statically
+
     config HEAP_ABORT_WHEN_ALLOCATION_FAILS
         bool "Abort if memory allocation fails"
         default n
