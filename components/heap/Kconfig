@@ -118,6 +118,13 @@ menu "Heap memory debugging"
         help
             Enables tracking a list of allocations of each task.
 
+    config HEAP_TASK_TRACKING_PER_USER_SUBTASK
+        bool "Enable heap task tracking per arbitrary user-defined subtask"
+        depends on HEAP_TASK_TRACKING
+        default n
+        help
+            Enables tracking during which user-defined subtasks allocations happened.
+
     config HEAP_TRACK_DELETED_TASKS
         bool "Keep information about the memory usage of deleted tasks"
         depends on HEAP_TASK_TRACKING
