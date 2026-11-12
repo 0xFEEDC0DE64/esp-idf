@@ -29,6 +29,15 @@ typedef struct {
     size_t count[NUM_HEAP_TASK_CAPS]; ///< Number of blocks partitioned by selected caps
 } heap_task_totals_t;
 
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+/** @brief Structure providing details about a user subtask. */
+typedef struct {
+    const char * name; ///< Name of the subtask
+    size_t peak_usage; ///< Information about the memory peak usage of this subtask
+    size_t current_usage; ///< Information about the memory current usage of this subtask
+} subtask_stat_t;
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+
 /** @brief Structure providing details about a block allocated by a task */
 typedef struct {
     TaskHandle_t task;                ///< Task that allocated the block
@@ -93,6 +102,10 @@ typedef struct {
     bool is_alive; ///< Information whether the task is alive (true) or deleted (false)
     size_t overall_peak_usage; ///< Information about the memory peak usage across all heaps of a given task
     size_t overall_current_usage; ///< Information about the memory current usage across all heaps of a given task
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    size_t subtask_count; ///< Number of different subtasks of the task
+    subtask_stat_t *subtask_stat; ///< Pointer to an array containing statistics of the subtasks of the task
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
     size_t heap_count; ///< Number of different heaps the task has used since its creation
     heap_stat_t *heap_stat; ///< Pointer to an array containing statistics of the heaps used by the task
 } task_stat_t;
@@ -103,6 +116,10 @@ typedef struct {
  */
 typedef struct {
     task_stat_t stat; ///< Statistics of the task
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    size_t subtask_count; ///< size of user defined subtask_stat array
+    subtask_stat_t *subtask_stat_start; ///< Pointer to the start to the user defined subtask_stat array
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
     size_t heap_count; ///< size of user defined heap_stat array
     heap_stat_t *heap_stat_start; ///< Pointer to the start to the user defined heap_stat array
     size_t alloc_count; ///< size of user defined alloc_stat array
@@ -116,11 +133,74 @@ typedef struct {
 typedef struct {
     size_t task_count; ///< user defined size of heap_single_task_stat_t array
     task_stat_t *stat_arr; ///< Pointer to the user defined array of heap_single_task_stat_t
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+    size_t subtask_count; ///< size of user defined subtask_stat array
+    subtask_stat_t *subtask_stat_start; ///< Pointer to the start to the user defined subtask_stat array
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
     size_t heap_count; ///< size of user defined heap_stat array
     heap_stat_t *heap_stat_start; ///< Pointer to the start to the user defined heap_stat array
     size_t alloc_count; ///< size of user defined alloc_stat array
     heap_task_block_t *alloc_stat_start; ///< Pointer to the start to the user defined alloc_stat array
 } heap_all_tasks_stat_t;
+
+#ifdef CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
+/**
+ * @brief Set the user subtask identifier of the current task
+ *
+ * Allows setting a subtask identifier to allow more granular heap tracking
+ *
+ * @param name New subtask identifier (static lifetime)
+ * @return The previous subtask identifier to allow scoped subtask to undo the change
+ */
+extern const char * heap_caps_set_user_subtask(const char * name);
+
+/**
+ * @brief Get the user subtask identifier of the current task
+ *
+ * Returns the user subtask identifier of the current task, or NULL if not set.
+ *
+ * @return The current subtask identifier
+ */
+extern const char * heap_caps_get_user_subtask(void);
+
+/**
+ * @brief Helper function for GNU cleanup attribute for subtasks
+ *
+ * Sets the current subtask to *p_subtask if not NULL and sets *p_subtask to NULL
+ *
+ * @param p_subtask A pointer to the saved subtask from heap_caps_set_user_subtask()
+ */
+extern void heap_caps_cleanup_user_subtask(const char ** p_subtask);
+
+/**
+ * @brief Helper macro for setting a subtask identifier for a scope
+ *
+ * Sets the current subtask to name and resets it back to the previous value at
+ * the end of the scope. The previous subtask is saved in v in the meantime.
+ *
+ * @param v An unused variable name that will be created as a const char *
+ * @param name New subtask identifier (static lifetime)
+ */
+#define HEAP_CAPS_SCOPED_SUBTASK(v, name) \
+    __attribute__((cleanup(heap_caps_cleanup_user_subtask))) \
+    const char * v = heap_caps_set_user_subtask(name)
+
+/**
+ * @brief Helper macro for conditionally setting a subtask identifier for a scope
+ *
+ * Sets the current subtask to name if the current subtask is condition, and
+ * resets it back to the previous value at the end of the scope. The previous
+ * subtask is saved in v in the meantime.
+ *
+ * @param v An unused variable name that will be created as a const char *
+ * @param condition Subtask identifier to compare with
+ * @param name New subtask identifier (static lifetime)
+ */
+#define HEAP_CAPS_CONDITIONAL_SCOPED_SUBTASK(v, condition, name) \
+    __attribute__((cleanup(heap_caps_cleanup_user_subtask))) \
+    const char * v = heap_caps_get_user_subtask(); \
+    if (v && strcmp(v, condition) == 0) v = heap_caps_set_user_subtask(name);
+#endif // CONFIG_HEAP_TASK_TRACKING_PER_USER_SUBTASK
 
 /**
  * @brief Return per-task heap allocation totals and lists of blocks.
